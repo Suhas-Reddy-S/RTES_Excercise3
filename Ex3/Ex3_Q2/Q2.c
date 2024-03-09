@@ -1,3 +1,16 @@
+/*
+ * File: Q2.c
+ * Author: Suhas Reddy and Krishna Suhagiya
+ * Description: This program demonstrates a multi-threaded system for updating 
+ *		and reading navigation state data. It includes two threads: 
+ *		one for updating navigation state, and one for reading the state. 
+ *		The update thread updates the navigation state variables periodically,
+ *		the read thread reads and prints the state.
+ *		The program utilizes POSIX threads and synchronization mechanisms 
+ *		such as mutexes and condition variables.
+ * Date: 9th March 2023
+ */
+
 #include <pthread.h>
 #include <math.h>
 #include <stdio.h>
@@ -10,6 +23,8 @@
 #define NUM_THREADS 2
 
 bool run_complete = false;
+pthread_cond_t signal_read = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct {
     double Latitude;
@@ -26,8 +41,6 @@ typedef struct {
     nav_state *state;
 } thread_param;
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-
 void *update_nav_state(void *threadp) {
     thread_param *tp = (thread_param *)threadp;
 
@@ -41,6 +54,7 @@ void *update_nav_state(void *threadp) {
         state->Roll = sin(2 * PI * (state->timestamp.tv_sec));
         state->Pitch = cos(2 * PI * (state->timestamp.tv_sec) * (state->timestamp.tv_sec));
         state->Yaw = cos(2 * PI * (state->timestamp.tv_sec));
+        pthread_cond_signal(&signal_read);     // Signal read function when update is complete
         pthread_mutex_unlock(&mutex);
         sleep(1); // Update rate of 1 Hz
     }
@@ -53,6 +67,7 @@ void *read_nav_state(void *threadp) {
 
     for (int i = 0; i < 18; i++) {
         pthread_mutex_lock(&mutex);
+        pthread_cond_wait(&signal_read, &mutex);  // Wait until update is complete
         nav_state *state = tp->state;
         printf("\nRead Thread Execution Number: %d", i);
         printf("\nLatitude: %lf", state->Latitude);
